@@ -2,7 +2,7 @@
 package main
 
 import (
-	"fmt"
+	. "fmt"
 	. "net"
 	"time"
 )
@@ -10,87 +10,78 @@ import (
 //var chan_con chan *UDPConn
 //var chan_send_addr chan *UDPAddr
 
-func ListenToNetwork(chan_con chan *UDPConn) {
+func ListenToNetwork(chan_con chan *UDPConn, port string) {
 
-	port := ":30000"
-
-	my_baddr_udp, err := ResolveUDPAddr("udp4", port)
-
-	if err != nil {
-		fmt.Println("error resolving UDP address on ", port)
-		fmt.Println(err)
-		return
-	}
-
-	conn, err := ListenUDP("udp", my_baddr_udp)
-
-	if err != nil {
-		fmt.Println("error listening on UDP port ", port)
-		fmt.Println(err)
-		return
-	}
+	//Finding the broadcast address using port 
+	udp_address, err := ResolveUDPAddr("udp4", port)
+	check_if_error(err, "ERROR RESOLVING UDP ADDRESS ON PORT: " + port)
+	
+	//creates a connection that listens to the broadcast address we just found 
+	conn, err := ListenUDP("udp", udp_address)
+	check_if_error(err, "ERROR LISTENING TO UDP ON PORT: " + port)
+	
 	chan_con <- conn
 
 	//defer conn.Close()
-
+	//creating the msg to send 
 	var msg []byte = make([]byte, 1500)
 
 	for {
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(100*time.Millisecond)
+		//trying to read from UDP channel 
+		num_bytes, sender_address, err := conn.ReadFromUDP(msg)
+		check_if_error(err, "ERROR READING DATA FROM CONNECTION")
+		//Print msg
+		if sender_address != nil {
 
-		no_bytes, server_address, err := conn.ReadFromUDP(msg)
+			Println("got message from ", sender_address, " with n = ", num_bytes)
 
-		if err != nil {
-			fmt.Println("error reading data from connection")
-			fmt.Println(err)
-			return
-		}
-
-		if server_address != nil {
-
-			fmt.Println("got message from ", server_address, " with n = ", no_bytes)
-
-			if no_bytes > 0 {
-				fmt.Println("from address", server_address, "got message:", string(msg[0:no_bytes]), no_bytes)
+			if num_bytes > 0 {
+				Println("from address", sender_address, "got message:", string(msg[0:num_bytes]), num_bytes)
 			}
 		}
 	}
 
 }
 
-func SendToNetwork(chan_con chan *UDPConn) {
-	send_address, err := ResolveUDPAddr("udp4", "129.241.187.255:30000")
+func SendToNetwork(chan_con chan *UDPConn,port string) {
+	//send_address we found in broadcast addr in Listen 
+	receiver_address, err := ResolveUDPAddr("udp4", "129.241.187.255" + port)
+	check_if_error(err, "ERROR WHILE RESOLVING UDP ADDRESS")
+	
 
-	if err != nil {
-		println("ERROR while resolving UDP addr")
-	}
+	Println("Muggles are sending a greeting?")
 
-	fmt.Println("Muggles are sending a greeting?")
-
-	//Deler socket
+	//Deler socket, collecting connection from channel 
 	connection := <-chan_con
 	greeting_msg := []byte("Liker du ost? Isåfall, hvilken type?")
 
-	if connection == nil {
-		fmt.Println("Error trying to write to server")
-	}
+	//send constantly 
 	for {
-		connection.WriteToUDP(greeting_msg, send_address)
-		time.Sleep(200 * time.Millisecond)
+		connection.WriteToUDP(greeting_msg, receiver_address)
+		time.Sleep(200*time.Millisecond)
 	}
 
 }
+func check_if_error(err error, error_msg string){
+	if err != nil{
+		Println("Error of type: " + error_msg)
+	}
+}
 
 func main() {
+	port := ":20002"
 	chan_con := make(chan *UDPConn, 1)
 
-	go ListenToNetwork(chan_con)
-	go SendToNetwork(chan_con)
+	go ListenToNetwork(chan_con,port)
+	go SendToNetwork(chan_con,port)
 
+	//Alive msg 
 	for {
-		time.Sleep(5 * time.Second)
-		fmt.Println("I see you muggles!")
+		time.Sleep(5*time.Second)
+		Println("I see you muggles!")
 	}
+	
 
 }
